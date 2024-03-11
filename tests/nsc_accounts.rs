@@ -6,12 +6,13 @@ use command_notifier::nsc_accounts_utils::{
     check_if_creds_exists,
     get_creds_path
 };
-use std::panic;
+use std::{env, panic};
 use std::process::Command;
 
 #[test]
 fn test_creds_path() {
-    let creds_base_path = "/Users/yohangouzerh/.local/share/nats/nsc/keys/creds";
+    let creds_base_path = env::var("CREDS_BASE_PATH").expect("CREDS_BASE_PATH must be set");
+    let creds_base_path = creds_base_path.as_str();
     let operator_name = "ServerBackend";
     let account_name = "test_account";
     let username = "test_user_01";
@@ -26,7 +27,8 @@ fn test_creds_path() {
 
 #[test]
 fn test_check_if_creds_exists_fail() {
-    let creds_base_path = "/Users/yohangouzerh/.local/share/nats/nsc/keys/creds";
+    let creds_base_path = env::var("CREDS_BASE_PATH").expect("CREDS_BASE_PATH must be set");
+    let creds_base_path = creds_base_path.as_str();
     let operator_name = "ServerBackend";
     let account_name = "test_account";
     let username = "djqwdjqwdjqwlkdjql2312djqwd";
@@ -40,10 +42,11 @@ fn test_check_if_creds_exists_fail() {
 fn test_check_if_creds_exists_ok() {
     let account_name = "test_account";
     let username = "test_user_01";
+    let creds_base_path = env::var("CREDS_BASE_PATH").expect("CREDS_BASE_PATH must be set");
+    let creds_base_path = creds_base_path.as_str();
+    let operator_name = "ServerBackend";
 
     let result = panic::catch_unwind(|| {
-        let creds_base_path = "/Users/yohangouzerh/.local/share/nats/nsc/keys/creds";
-        let operator_name = "ServerBackend";
 
         create_nsc_account(account_name).unwrap();
 
@@ -57,7 +60,9 @@ fn test_check_if_creds_exists_ok() {
 
         assert!(!creds_path.is_empty(), "Creds path should not be empty");
 
-        assert_eq!(creds_path, "/Users/yohangouzerh/.local/share/nats/nsc/keys/creds/ServerBackend/test_account/test_user_01.creds", "Creds path is incorrect");
+        let correct_base_path = format!("{}/{}/{}/{}.creds", creds_base_path, operator_name, account_name, username);
+
+        assert_eq!(creds_path, correct_base_path, "Creds path is incorrect");
 
         println!("Creds path: {}", creds_path);
     });
