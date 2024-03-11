@@ -1,2 +1,3 @@
-pub mod nsc_account_management;
+pub mod nsc_accounts_utils;
 pub mod postgres;
+pub mod accounts_lifecycle;

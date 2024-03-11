@@ -1,8 +1,27 @@
 use std::sync::Arc;
 use uuid::Uuid;
+use tokio_postgres::NoTls;
 
 // Schema of nats table
 // id / nsc_account_id / creds_admin / creds_user / created_at
+
+pub async fn setup_postgres_client() -> tokio_postgres::Client {
+    use std::env;
+
+    let database_connection_string = env::var("DATABASE_CONNECTION_STRING").expect("DATABASE_CONNECTION_STRING must be set");
+    let (postgres_client, connection) =
+        tokio_postgres::connect(&database_connection_string, NoTls)
+        .await
+        .unwrap();
+
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("Connection error: {}", e);
+        }
+    });
+    postgres_client
+
+}
 
 pub async fn verify_nsc_user_exists(postgres_client: Arc<tokio_postgres::Client>, user_id: Uuid) -> Result<bool, tokio_postgres::Error>{
     // Check if user exists in the database
@@ -23,11 +42,16 @@ pub async fn delete_nsc_user(postgres_client: Arc<tokio_postgres::Client>, user_
     Ok(result > 0)
 }
 
-pub async fn get_creds_admin(postgres_client: Arc<tokio_postgres::Client>, user_id: Uuid) -> Result<String, tokio_postgres::Error>{
+pub async fn get_creds_admin(postgres_client: Arc<tokio_postgres::Client>, user_id: Uuid) -> Result<String, String>{
     let rows = postgres_client.query("SELECT creds_admin FROM nats WHERE id = $1", &[&user_id])
-        .await?;
+        .await
+        .map_err(|err| format!("Failed to run query: {}", err));
 
+    let rows = rows.unwrap();
     let row = rows.get(0);
+    if let None = row {
+        return Err("No rows found".to_string());
+    }
     let creds_admin: String = row.unwrap().get(0);
     Ok(creds_admin)
 }

@@ -1,7 +1,11 @@
 use std::process::Command;
 
-pub fn get_creds_path(creds_base_path: &str, operator_name: &str, account_name: &str, username: &str) -> Result<String, String> {
-    let path_str = format!("{}/{}/{}/{}.creds", creds_base_path, operator_name, account_name, username);
+pub fn get_creds_path(creds_base_path: &str, operator_name: &str, account_name: &str, username: &str) -> String {
+    format!("{}/{}/{}/{}.creds", creds_base_path, operator_name, account_name, username)
+}
+
+pub fn check_if_creds_exists(creds_base_path: &str, operator_name: &str, account_name: &str, username: &str) -> Result<String, String> {
+    let path_str = get_creds_path(creds_base_path, operator_name, account_name, username);
     let path = std::path::Path::new(&path_str);
     if !path.exists() {
         return Err(format!("Credentials file not found: {}", path_str));
