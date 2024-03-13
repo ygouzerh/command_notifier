@@ -4,10 +4,15 @@ use command_notifier::nsc_accounts_utils::{
     delete_nsc_account,
     delete_nsc_user,
     check_if_creds_exists,
-    get_creds_path
+    get_creds_path,
+    get_account_jwt
 };
 use std::{env, panic};
 use std::process::Command;
+
+mod common;
+
+use common::utils::{cleanup_nsc_user, cleanup_nsc_account};
 
 #[test]
 fn test_creds_path() {
@@ -95,6 +100,25 @@ fn test_create_nsc_account() {
     cleanup_nsc_account("test_account");
 
     // Propagate the panic, if any
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_get_jwt() {
+    let account_name = "test_account";
+    let result = panic::catch_unwind(|| {
+        create_nsc_account(account_name).unwrap();
+        let jwt = get_account_jwt(account_name);
+        assert!(jwt.is_ok(), "Failed to get jwt");
+        let jwt = jwt.unwrap();
+        assert!(!jwt.is_empty(), "JWT should not be empty");
+        println!("JWT: {}", jwt);
+        let jwt_parts: Vec<&str> = jwt.split('.').collect();
+        assert_eq!(jwt_parts.len(), 3, "JWT should have 3 parts");
+    });
+
+    cleanup_nsc_account(account_name);
+
     assert!(result.is_ok());
 }
 
@@ -187,27 +211,4 @@ fn test_delete_nsc_user() {
     cleanup_nsc_account(account_name);
 
     assert!(result.is_ok());
-}
-
-
-#[cfg(test)]
-fn cleanup_nsc_account(account_name: &str) {
-    // Clean up the generated account and user
-    let _ = Command::new("nsc")
-        .arg("delete")
-        .arg("account")
-        .arg(account_name)
-        .output();
-}
-
-#[cfg(test)]
-fn cleanup_nsc_user(account_name: &str, username: &str) {
-    // Clean up the generated account and user
-    let _ = Command::new("nsc")
-        .arg("delete")
-        .arg("user")
-        .arg("--account")
-        .arg(account_name)
-        .arg(username)
-        .output();
 }

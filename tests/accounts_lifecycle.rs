@@ -1,21 +1,34 @@
 use command_notifier::accounts_lifecycle::get_admin_creds_if_not_exists;
 
 use command_notifier::nsc_accounts_utils::get_creds_path;
-use command_notifier::postgres::{insert_nsc_user, setup_postgres_client, update_creds_admin, delete_nsc_user};
+use command_notifier::postgres::{setup_postgres_client, update_creds_admin, delete_nsc_user};
 use uuid::Uuid;
 
 use std::env;
 use std::sync::Arc;
 
+mod common;
+
+use common::utils::{insert_dummy_nsc_user, cleanup_postgres_user};
+
+#[cfg(test)]
+async fn cleanup_user(username: &str, operator_name:&str, account_name: &str) {
+    let creds_base_path = env::var("CREDS_BASE_PATH").expect("CREDS_BASE_PATH must be set");
+    let username_uuid = Uuid::parse_str(username).unwrap();
+    let _result = cleanup_postgres_user(username_uuid).await;
+    let _result = std::fs::remove_file(get_creds_path(&creds_base_path, operator_name, account_name, username));
+}
+
 #[tokio::test]
 async fn test_get_admin_creds_not_exists_should_fail() {
     let creds_base_path = env::var("CREDS_BASE_PATH").expect("CREDS_BASE_PATH must be set");
-    let creds_base_path = creds_base_path.as_str();
     let operator_name = "ServerBackend";
     let account_name = "test_acooount";
     let username = "7c278e3c-d344-45a0-a287-9add7253b512";
 
-    let result = get_admin_creds_if_not_exists(creds_base_path, operator_name, account_name, username).await;
+    cleanup_user(username, operator_name, account_name).await;
+
+    let result = get_admin_creds_if_not_exists(&creds_base_path, operator_name, account_name, username).await;
 
     assert!(result.is_err(), "Result should be an error {:?}", result);
 }
@@ -36,13 +49,15 @@ async fn test_get_admin_creds_not_yet_exists() {
     
     let creds_base_path_cloned = creds_base_path.to_owned();
 
+    cleanup_user(username, operator_name, account_name).await;
+    
     let result = tokio::spawn(async move {
     
-        let _result = insert_nsc_user(Arc::clone(&postgres_client), username_uuid).await;
-    
+        let _result = insert_dummy_nsc_user(username_uuid).await;
+
         let _result = update_creds_admin(Arc::clone(&postgres_client), username_uuid, creds_admin).await;
 
-        let result = get_admin_creds_if_not_exists(creds_base_path.as_str(), operator_name, account_name, username).await;
+        let result = get_admin_creds_if_not_exists(&creds_base_path, operator_name, account_name, username).await;
         
         let creds_path = result.unwrap();
 
@@ -80,10 +95,11 @@ async fn test_get_admin_creds_already_exists() {
 
     let creds_admin = "A656878dqdqdqwd";
 
+    cleanup_user(username, operator_name, account_name).await;
     
     let result = tokio::spawn(async move {
         
-        let creds_path = get_creds_path(creds_base_path.as_str(), operator_name, account_name, username);
+        let creds_path = get_creds_path(&creds_base_path, operator_name, account_name, username);
 
         println!("Creds path: {}", creds_path);
         
@@ -91,7 +107,7 @@ async fn test_get_admin_creds_already_exists() {
             .map_err(|err| format!("Failed to write creds_admin to file: {}", err))
             .unwrap();
 
-        let result = get_admin_creds_if_not_exists(creds_base_path.as_str(), operator_name, account_name, username).await;
+        let result = get_admin_creds_if_not_exists(&creds_base_path, operator_name, account_name, username).await;
 
         assert!(result.is_ok(), "Failed to get creds path: {:?}", result);
 

@@ -4,66 +4,38 @@ use command_notifier::postgres::{
     delete_nsc_user,
     update_creds_admin,
     update_creds_user,
-    get_creds_admin
+    get_creds_admin,
+    update_account_jwt
 };
+
 use std::sync::Arc;
-use tokio_postgres::NoTls;
 use uuid::Uuid;
-use std::panic;
 
-#[cfg(test)]
-fn get_user_uuid() -> Uuid {
-    // yohan.gouzerh+test@outlook.com
-    Uuid::parse_str("7c278ecc-d624-45a0-aa87-9add7253b517").unwrap()
-}
+mod common;
 
-#[cfg(test)]
-async fn setup_postgres_client() -> tokio_postgres::Client {
-    use std::env;
-
-    let database_connection_string = env::var("DATABASE_CONNECTION_STRING").expect("DATABASE_CONNECTION_STRING must be set");
-    let (postgres_client, connection) =
-        tokio_postgres::connect(&database_connection_string, NoTls)
-        .await
-        .unwrap();
-
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("Connection error: {}", e);
-        }
-    });
-    postgres_client
-
-}
-
-#[cfg(test)]
-async fn cleanup_user(user_id: Uuid) {
-    let postgres_client = setup_postgres_client().await;
-    let result = postgres_client.execute("DELETE FROM nats WHERE id = $1", &[&user_id])
-        .await;
-    assert!(result.is_ok(), "Failed to delete user: {:?}", result);
-}
+use common::utils::{get_user_uuid, setup_postgres_client, insert_dummy_nsc_user, cleanup_postgres_user};
 
 #[tokio::test]
 async fn test_get_creds_admin() {
     let postgres_client = setup_postgres_client().await;
-    let postgres_client_02 = setup_postgres_client().await;
-    let postgres_client_03 = setup_postgres_client().await;
+    let postgres_client = Arc::new(postgres_client);
     let uuid = get_user_uuid();
     let creds_admin = "A12345";
 
+    cleanup_postgres_user(uuid).await;
+
     let result = tokio::spawn(async move {
-        let _result = insert_nsc_user(Arc::new(postgres_client), uuid).await;
-        let _result = update_creds_admin(Arc::new(postgres_client_02), uuid, creds_admin).await;
+        let _result = insert_dummy_nsc_user( uuid).await;
+        let _result = update_creds_admin(Arc::clone(&postgres_client), uuid, creds_admin).await;
         
-        let result = get_creds_admin(Arc::new(postgres_client_03), uuid).await;
+        let result = get_creds_admin(Arc::clone(&postgres_client), uuid).await;
         assert!(result.is_ok(), "Failed to get creds_admin: {:?}", result);
         let result = result.unwrap();
         assert!(!result.is_empty(), "Creds_admin should not be empty");
         assert!(result == creds_admin, "Creds_admin should be equal to {}", creds_admin);
     }).await;
 
-    cleanup_user(uuid).await;
+    cleanup_postgres_user(uuid).await;
 
     assert!(result.is_ok(), "Failed to get creds_admin: {:?}", result);
 }
@@ -71,37 +43,54 @@ async fn test_get_creds_admin() {
 #[tokio::test]
 async fn test_insert_nsc_user() {
     let postgres_client = setup_postgres_client().await;
-    let postgres_client_02 = setup_postgres_client().await;
+    let postgres_client = Arc::new(postgres_client);
+
+    let uuid = get_user_uuid();
+    cleanup_postgres_user(uuid).await;
+
     let result = tokio::spawn(async move {
-        let uuid = get_user_uuid();
-        let result = insert_nsc_user(Arc::new(postgres_client), uuid).await;
+        let creds_admin = "A12345";
+        let creds_user = "U12345";
+        let account_jwt = "JWT.123.456";
+        let result = insert_nsc_user(Arc::clone(&postgres_client), uuid, creds_admin, creds_user, account_jwt).await;
         assert!(result.is_ok(), "Failed to insert user: {:?}", result);
         assert!(result.unwrap() == true, "User should have been inserted");
 
-        let rows = postgres_client_02.query("SELECT * FROM nats WHERE id = $1", &[&uuid])
-        .await.unwrap();
-        assert!(rows.len() > 0, "User should exist")
+        let rows = Arc::clone(&postgres_client).query("SELECT creds_admin, creds_user, account_jwt FROM nats WHERE id = $1", &[&uuid])
+            .await.unwrap();
+        assert!(rows.len() > 0, "User should exist");
+        // Verify that fields are correct
+        let row = rows.get(0);
+        let creds_admin_db: String = row.unwrap().get(0);
+        let creds_user_db: String = row.unwrap().get(1);
+        let account_jwt_db: String = row.unwrap().get(2);
+        assert_eq!(creds_admin_db, creds_admin, "Creds_admin should be equal to {}", creds_admin);
+        assert_eq!(creds_user_db, creds_user, "Creds_user should be equal to {}", creds_user);
+        assert_eq!(account_jwt_db, account_jwt, "Account_jwt should be equal to {}", account_jwt);
+
     }).await;
 
     assert!(result.is_ok(), "Failed to insert user: {:?}", result);
 
-    cleanup_user(get_user_uuid()).await;
+    cleanup_postgres_user(get_user_uuid()).await;
 }
 
 #[tokio::test]
 async fn test_delete_nsc_user() {
     let postgres_client = setup_postgres_client().await;
-    let postgres_client_02 = setup_postgres_client().await;
-    let postgres_client_03 = setup_postgres_client().await;
-    let result = tokio::spawn(async move {
-        let uuid = get_user_uuid();
-        let _result = insert_nsc_user(Arc::new(postgres_client), uuid).await;
+    let postgres_client = Arc::new(postgres_client);
 
-        let result = delete_nsc_user(Arc::new(postgres_client_02), uuid).await;
+    let uuid = get_user_uuid();
+    cleanup_postgres_user(uuid).await;
+
+    let result = tokio::spawn(async move {
+        let _result = insert_dummy_nsc_user( uuid).await;
+
+        let result = delete_nsc_user(Arc::clone(&postgres_client), uuid).await;
         assert!(result.is_ok(), "Failed to delete user: {:?}", result);
         assert!(result.unwrap() == true, "User should have been deleted");
 
-        let rows = postgres_client_03.query("SELECT * FROM nats WHERE id = $1", &[&uuid])
+        let rows = Arc::clone(&postgres_client).query("SELECT * FROM nats WHERE id = $1", &[&uuid])
         .await.unwrap();
         assert!(rows.len() == 0, "User should not exist")
     }).await;
@@ -112,18 +101,20 @@ async fn test_delete_nsc_user() {
 #[tokio::test]
 async fn test_update_creds_admin() {
     let postgres_client = setup_postgres_client().await;
-    let postgres_client_02 = setup_postgres_client().await;
-    let postgres_client_03 = setup_postgres_client().await;
+    let postgres_client = Arc::new(postgres_client);
+
+    let uuid = get_user_uuid();
+    cleanup_postgres_user(uuid).await;
+
     let result = tokio::spawn(async move {
-        let uuid = get_user_uuid();
-        let _result = insert_nsc_user(Arc::new(postgres_client_02), uuid).await;
+        let _result = insert_dummy_nsc_user(uuid).await;
 
         let creds_admin = "A12345";
-        let result = update_creds_admin(Arc::new(postgres_client), uuid, creds_admin).await;
+        let result = update_creds_admin(Arc::clone(&postgres_client), uuid, creds_admin).await;
         assert!(result.is_ok(), "Failed to update creds_admin: {:?}", result);
         assert!(result.unwrap() == true, "Creds_admin should have been updated");
 
-        let rows = postgres_client_03.query("SELECT creds_admin FROM nats WHERE id = $1", &[&uuid])
+        let rows = Arc::clone(&postgres_client).query("SELECT creds_admin FROM nats WHERE id = $1", &[&uuid])
         .await.unwrap();
         let row = rows.get(0);
         let creds_admin_db: String = row.unwrap().get(0);
@@ -132,24 +123,26 @@ async fn test_update_creds_admin() {
 
     assert!(result.is_ok(), "Failed to update creds_admin: {:?}", result);
 
-    cleanup_user(get_user_uuid()).await;
+    cleanup_postgres_user(get_user_uuid()).await;
 }
 
 #[tokio::test]
 async fn test_update_creds_user() {
     let postgres_client = setup_postgres_client().await;
-    let postgres_client_02 = setup_postgres_client().await;
-    let postgres_client_03 = setup_postgres_client().await;
+    let postgres_client = Arc::new(postgres_client);
+
+    let uuid = get_user_uuid();
+    cleanup_postgres_user(uuid).await;
+
     let result = tokio::spawn(async move {
-        let uuid = get_user_uuid();
-        let _result = insert_nsc_user(Arc::new(postgres_client_02), uuid).await;
+        let _result = insert_dummy_nsc_user(uuid).await;
 
         let creds_user = "U12345";
-        let result = update_creds_user(Arc::new(postgres_client), uuid, creds_user).await;
+        let result = update_creds_user(Arc::clone(&postgres_client), uuid, creds_user).await;
         assert!(result.is_ok(), "Failed to update creds_user: {:?}", result);
         assert!(result.unwrap() == true, "Creds_user should have been updated");
 
-        let rows = postgres_client_03.query("SELECT creds_user FROM nats WHERE id = $1", &[&uuid])
+        let rows =Arc::clone(&postgres_client).query("SELECT creds_user FROM nats WHERE id = $1", &[&uuid])
         .await.unwrap();
         let row = rows.get(0);
         let creds_user_db: String = row.unwrap().get(0);
@@ -158,7 +151,36 @@ async fn test_update_creds_user() {
 
     assert!(result.is_ok(), "Failed to update creds_user: {:?}", result);
 
-    // cleanup_user(get_user_uuid()).await;
+    // cleanup_postgres_user(get_user_uuid()).await;
+}
+
+#[tokio::test]
+async fn test_get_account_jwt() {
+    let postgres_client = setup_postgres_client().await;
+    let postgres_client = Arc::new(postgres_client);
+
+    let uuid = get_user_uuid();
+    cleanup_postgres_user(uuid).await;
+
+    let result = tokio::spawn(async move {
+        let _result = insert_dummy_nsc_user(uuid).await;
+
+        let account_jwt = "JWT12345";
+        let result = update_account_jwt(Arc::clone(&postgres_client), uuid, account_jwt).await;
+        assert!(result.is_ok(), "Failed to update account_jwt: {:?}", result);
+        assert!(result.unwrap() == true, "Account_jwt should have been updated");
+
+        let rows = Arc::clone(&postgres_client).query("SELECT account_jwt FROM nats WHERE id = $1", &[&uuid])
+            .await.unwrap();
+        let row = rows.get(0);
+        let account_jwt_db: String = row.unwrap().get(0);
+        assert_eq!(account_jwt_db, account_jwt, "Account_jwt should have been updated");
+    }).await;
+
+    assert!(result.is_ok(), "Failed to update account_jwt: {:?}", result);
+
+    cleanup_postgres_user(get_user_uuid()).await;
+
 }
 
 

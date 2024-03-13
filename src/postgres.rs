@@ -3,7 +3,7 @@ use uuid::Uuid;
 use tokio_postgres::NoTls;
 
 // Schema of nats table
-// id / nsc_account_id / creds_admin / creds_user / created_at
+// id / nsc_account_id / creds_admin / creds_user / account_jwt / created_at 
 
 pub async fn setup_postgres_client() -> tokio_postgres::Client {
     use std::env;
@@ -30,8 +30,17 @@ pub async fn verify_nsc_user_exists(postgres_client: Arc<tokio_postgres::Client>
     Ok(rows.len() > 0)
 }
 
-pub async fn insert_nsc_user(postgres_client: Arc<tokio_postgres::Client>, user_id: Uuid) -> Result<bool, tokio_postgres::Error>{
-    let result = postgres_client.execute("INSERT INTO nats (id) VALUES ($1)", &[&user_id])
+// creds_admin / creds_user / account_jwt / created_at 
+pub async fn insert_nsc_user(
+    postgres_client: Arc<tokio_postgres::Client>,
+    user_id: Uuid,
+    creds_admin: &str,
+    creds_user: &str,
+    account_jwt: &str
+) -> Result<bool, tokio_postgres::Error>{
+    // let result = postgres_client.execute("INSERT INTO nats (id) VALUES ($1)", &[&user_id])
+        // .await?;
+    let result = postgres_client.execute("INSERT INTO nats (id, creds_admin, creds_user, account_jwt) VALUES ($1, $2, $3, $4)", &[&user_id, &creds_admin, &creds_user, &account_jwt])
         .await?;
     Ok(result > 0)
 }
@@ -64,6 +73,12 @@ pub async fn update_creds_admin(postgres_client: Arc<tokio_postgres::Client>, us
 
 pub async fn update_creds_user(postgres_client: Arc<tokio_postgres::Client>, user_id: Uuid, creds_user: &str) -> Result<bool, tokio_postgres::Error>{
     let result = postgres_client.execute("UPDATE nats SET creds_user = $1 WHERE id = $2", &[&creds_user, &user_id])
+        .await?;
+    Ok(result > 0)
+}
+
+pub async fn update_account_jwt(postgres_client: Arc<tokio_postgres::Client>, user_id: Uuid, account_jwt: &str) -> Result<bool, tokio_postgres::Error>{
+    let result = postgres_client.execute("UPDATE nats SET account_jwt = $1 WHERE id = $2", &[&account_jwt, &user_id])
         .await?;
     Ok(result > 0)
 }

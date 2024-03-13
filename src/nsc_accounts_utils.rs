@@ -15,6 +15,8 @@ pub fn check_if_creds_exists(creds_base_path: &str, operator_name: &str, account
 
 pub fn create_nsc_account(account_name: &str) -> Result<String, String> {
 
+    // TODO: Add operator
+
     // Generate the path of the .creds file
     // let creds_path = format!("{}/{}/{}.creds", creds_path, account_name, user_name);
 
@@ -57,6 +59,9 @@ pub fn create_nsc_account(account_name: &str) -> Result<String, String> {
 }
 
 pub fn delete_nsc_account(account_name: &str) -> Result<bool, String> {
+
+    // TODO: Add operator
+
     let output = Command::new("nsc")
         .arg("delete")
         .arg("account")
@@ -72,7 +77,33 @@ pub fn delete_nsc_account(account_name: &str) -> Result<bool, String> {
 
 }
 
+pub fn get_account_jwt(account_name: &str) -> Result<String, String> {
+    // nsc describe account <account_name> -- raw
+    let output = Command::new("nsc")
+        .arg("describe")
+        .arg("account")
+        .arg(account_name)
+        .arg("--raw")
+        .output()
+        .map_err(|e| format!("Failed to get account jwt: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Failed to get account jwt: {}", stderr));
+    }
+
+    let jwt = String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .to_string();
+
+    Ok(jwt)
+
+}
+
 pub fn create_nsc_user(account_name: &str, username: &str) -> Result<bool, String> {
+
+    // TODO: Add operator
+
     // Create the user
     let output = Command::new("nsc")
         .arg("add")
@@ -93,6 +124,9 @@ pub fn create_nsc_user(account_name: &str, username: &str) -> Result<bool, Strin
 }
 
 pub fn delete_nsc_user(username: &str) -> Result<bool, String> {
+
+    // TODO: Add operator
+
     let output = Command::new("nsc")
         .arg("delete")
         .arg("user")
