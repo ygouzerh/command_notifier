@@ -123,14 +123,17 @@ pub fn create_nsc_user(account_name: &str, username: &str) -> Result<bool, Strin
     Ok(true)
 }
 
-pub fn delete_nsc_user(username: &str) -> Result<bool, String> {
+pub fn delete_nsc_user(account_name: &str, username: &str) -> Result<bool, String> {
 
     // TODO: Add operator
 
     let output = Command::new("nsc")
         .arg("delete")
         .arg("user")
+        .arg("--name")
         .arg(username)
+        .arg("--account")
+        .arg(&account_name)
         .output()
         .map_err(|e| format!("Failed to delete user: {}", e))?;
 

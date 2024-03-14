@@ -34,18 +34,19 @@ pub async fn verify_nsc_user_exists(postgres_client: Arc<tokio_postgres::Client>
 pub async fn insert_nsc_user(
     postgres_client: Arc<tokio_postgres::Client>,
     user_id: Uuid,
+    nsc_account_id: &str,
     creds_admin: &str,
     creds_user: &str,
     account_jwt: &str
 ) -> Result<bool, tokio_postgres::Error>{
     // let result = postgres_client.execute("INSERT INTO nats (id) VALUES ($1)", &[&user_id])
         // .await?;
-    let result = postgres_client.execute("INSERT INTO nats (id, creds_admin, creds_user, account_jwt) VALUES ($1, $2, $3, $4)", &[&user_id, &creds_admin, &creds_user, &account_jwt])
+    let result = postgres_client.execute("INSERT INTO nats (id, nsc_account_id, creds_admin, creds_user, account_jwt) VALUES ($1, $2, $3, $4, $5)", &[&user_id, &nsc_account_id, &creds_admin, &creds_user, &account_jwt])
         .await?;
     Ok(result > 0)
 }
 
-pub async fn delete_nsc_user(postgres_client: Arc<tokio_postgres::Client>, user_id: Uuid) -> Result<bool, tokio_postgres::Error>{
+pub async fn delete_nsc_user_from_postgres(postgres_client: Arc<tokio_postgres::Client>, user_id: Uuid) -> Result<bool, tokio_postgres::Error>{
     let result = postgres_client.execute("DELETE FROM nats WHERE id = $1", &[&user_id])
         .await?;
     Ok(result > 0)

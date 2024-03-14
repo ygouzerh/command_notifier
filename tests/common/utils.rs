@@ -12,12 +12,19 @@ pub fn get_user_uuid() -> Uuid {
 }
 
 #[cfg(test)]
+pub fn check_if_jwt(content: &str) -> bool {
+    let jwt_parts: Vec<&str> = content.split('.').collect();
+    return jwt_parts.len() == 3;
+}
+
+#[cfg(test)]
 pub async fn insert_dummy_nsc_user(user_id: Uuid) -> Result<(), String>{
     let postgres_client = setup_postgres_client().await;
+    let nsc_account_id = "nsc_account_id_dummy";
     let creds_admin = "creds_admin_dummy";
     let creds_user = "creds_user_dummy";
     let account_jwt = "account_jwt_dummy";
-    let _result = insert_nsc_user(Arc::new(postgres_client), user_id, creds_admin, creds_user, account_jwt)
+    let _result = insert_nsc_user(Arc::new(postgres_client), user_id, nsc_account_id, creds_admin, creds_user, account_jwt)
         .await
         .map_err(|err| format!("Failed to insert user: {}", err))?;
     Ok(())

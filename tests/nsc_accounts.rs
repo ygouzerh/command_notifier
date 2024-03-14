@@ -18,11 +18,11 @@ use common::utils::{cleanup_nsc_user, cleanup_nsc_account};
 fn test_creds_path() {
     let creds_base_path = env::var("CREDS_BASE_PATH").expect("CREDS_BASE_PATH must be set");
     let creds_base_path = creds_base_path.as_str();
-    let operator_name = "ServerBackend";
+    let operator_name = env::var("TEST_OPERATOR_NAME").expect("TEST_OPERATOR_NAME must be set");
     let account_name = "test_account";
     let username = "test_user_01";
 
-    let creds_path = get_creds_path(creds_base_path, operator_name, account_name, username);
+    let creds_path = get_creds_path(creds_base_path, &operator_name, account_name, username);
 
     assert_eq!(creds_path, "/Users/yohangouzerh/.local/share/nats/nsc/keys/creds/ServerBackend/test_account/test_user_01.creds", "Creds path is incorrect");
 
@@ -34,11 +34,11 @@ fn test_creds_path() {
 fn test_check_if_creds_exists_fail() {
     let creds_base_path = env::var("CREDS_BASE_PATH").expect("CREDS_BASE_PATH must be set");
     let creds_base_path = creds_base_path.as_str();
-    let operator_name = "ServerBackend";
+    let operator_name = env::var("TEST_OPERATOR_NAME").expect("TEST_OPERATOR_NAME must be set");
     let account_name = "test_account";
     let username = "djqwdjqwdjqwlkdjql2312djqwd";
 
-    let result = check_if_creds_exists(creds_base_path, operator_name, account_name, username);
+    let result = check_if_creds_exists(creds_base_path, &operator_name, account_name, username);
 
     assert!(result.is_err(), "Should fail to get creds path");
 }
@@ -49,7 +49,7 @@ fn test_check_if_creds_exists_ok() {
     let username = "test_user_01";
     let creds_base_path = env::var("CREDS_BASE_PATH").expect("CREDS_BASE_PATH must be set");
     let creds_base_path = creds_base_path.as_str();
-    let operator_name = "ServerBackend";
+    let operator_name = env::var("TEST_OPERATOR_NAME").expect("TEST_OPERATOR_NAME must be set");
 
     let result = panic::catch_unwind(|| {
 
@@ -57,7 +57,7 @@ fn test_check_if_creds_exists_ok() {
 
         create_nsc_user(account_name, username).unwrap();
 
-        let result = check_if_creds_exists(creds_base_path, operator_name, account_name, username);
+        let result = check_if_creds_exists(creds_base_path, &operator_name, account_name, username);
 
         assert!(result.is_ok(), "Failed to get creds path: {:?}", result);
 
@@ -188,7 +188,7 @@ fn test_delete_nsc_user() {
 
         assert!(result.is_ok(), "Failed to create NATS user");
 
-        let result = delete_nsc_user(username);
+        let result = delete_nsc_user(account_name, username);
 
         assert!(result.is_ok(), "Failed to delete NATS user");
 

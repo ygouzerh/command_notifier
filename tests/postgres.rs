@@ -1,7 +1,7 @@
 use command_notifier::postgres::{
     verify_nsc_user_exists,
     insert_nsc_user,
-    delete_nsc_user,
+    delete_nsc_user_from_postgres,
     update_creds_admin,
     update_creds_user,
     get_creds_admin,
@@ -49,10 +49,11 @@ async fn test_insert_nsc_user() {
     cleanup_postgres_user(uuid).await;
 
     let result = tokio::spawn(async move {
+        let nsc_account_id = "ABCDEF12";
         let creds_admin = "A12345";
         let creds_user = "U12345";
         let account_jwt = "JWT.123.456";
-        let result = insert_nsc_user(Arc::clone(&postgres_client), uuid, creds_admin, creds_user, account_jwt).await;
+        let result = insert_nsc_user(Arc::clone(&postgres_client), uuid, nsc_account_id, creds_admin, creds_user, account_jwt).await;
         assert!(result.is_ok(), "Failed to insert user: {:?}", result);
         assert!(result.unwrap() == true, "User should have been inserted");
 
@@ -86,7 +87,7 @@ async fn test_delete_nsc_user() {
     let result = tokio::spawn(async move {
         let _result = insert_dummy_nsc_user( uuid).await;
 
-        let result = delete_nsc_user(Arc::clone(&postgres_client), uuid).await;
+        let result = delete_nsc_user_from_postgres(Arc::clone(&postgres_client), uuid).await;
         assert!(result.is_ok(), "Failed to delete user: {:?}", result);
         assert!(result.unwrap() == true, "User should have been deleted");
 
