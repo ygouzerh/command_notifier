@@ -62,7 +62,7 @@ async fn test_create_and_insert_user() {
         assert!(check_if_jwt(&account_jwt_db), "Account jwt is not a jwt");
     }).await;
 
-    cleanup_user(&username.to_string(), &operator_name_cloned, &username.to_string()).await;
+    // cleanup_user(&username.to_string(), &operator_name_cloned, &username.to_string()).await;
 
     delete_creds_files_of_full_user(&creds_base_path_cloned, &operator_name_cloned, &username.to_string());
 

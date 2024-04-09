@@ -6,6 +6,7 @@ use tokio_postgres::NoTls;
 // id / nsc_account_id / creds_admin / creds_user / account_jwt / created_at 
 
 pub async fn setup_postgres_client() -> tokio_postgres::Client {
+    // TODO: See if need to pass connection string in environment here or not
     use std::env;
 
     let database_connection_string = env::var("DATABASE_CONNECTION_STRING").expect("DATABASE_CONNECTION_STRING must be set");
@@ -82,4 +83,8 @@ pub async fn update_account_jwt(postgres_client: Arc<tokio_postgres::Client>, us
     let result = postgres_client.execute("UPDATE nats SET account_jwt = $1 WHERE id = $2", &[&account_jwt, &user_id])
         .await?;
     Ok(result > 0)
+}
+
+pub async fn get_api_key(postgres_client: Arc<tokio_postgres::Client>, user_id: Uuid) -> Result<String, tokio_postgres::Error>{
+    todo!()
 }

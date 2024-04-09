@@ -15,11 +15,6 @@ pub fn check_if_creds_exists(creds_base_path: &str, operator_name: &str, account
 
 pub fn create_nsc_account(account_name: &str) -> Result<String, String> {
 
-    // TODO: Add operator
-
-    // Generate the path of the .creds file
-    // let creds_path = format!("{}/{}/{}.creds", creds_path, account_name, user_name);
-
     // Create the NATS account
     let account_output = Command::new("nsc")
         .arg("add")
@@ -41,7 +36,7 @@ pub fn create_nsc_account(account_name: &str) -> Result<String, String> {
         .arg("account")
         .arg(account_name)
         .arg("--field")
-        .arg("iss")
+        .arg("sub")
         .output()
         .map_err(|e| format!("Failed to describe account: {}", e))?;
 
@@ -59,8 +54,6 @@ pub fn create_nsc_account(account_name: &str) -> Result<String, String> {
 }
 
 pub fn delete_nsc_account(account_name: &str) -> Result<bool, String> {
-
-    // TODO: Add operator
 
     let output = Command::new("nsc")
         .arg("delete")
@@ -102,8 +95,6 @@ pub fn get_account_jwt(account_name: &str) -> Result<String, String> {
 
 pub fn create_nsc_user(account_name: &str, username: &str) -> Result<bool, String> {
 
-    // TODO: Add operator
-
     // Create the user
     let output = Command::new("nsc")
         .arg("add")
@@ -124,8 +115,6 @@ pub fn create_nsc_user(account_name: &str, username: &str) -> Result<bool, Strin
 }
 
 pub fn delete_nsc_user(account_name: &str, username: &str) -> Result<bool, String> {
-
-    // TODO: Add operator
 
     let output = Command::new("nsc")
         .arg("delete")
