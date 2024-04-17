@@ -1,12 +1,6 @@
 use axum::{
-    Json,
-    routing::get,
-    routing::post,
-    Router,
-    extract::{Extension, Path, State},
-    http::StatusCode,
-    response::IntoResponse,
-    debug_handler
+    debug_handler, extract::{Extension, Path, Request, State}, http::StatusCode, response::IntoResponse, routing::{get, post}, Json, Router,
+    body::Body,
 };
 
 use command_notifier::{accounts_lifecycle::get_admin_creds_if_not_exists, postgres::{self, setup_postgres_client, verify_nsc_user_exists}};
@@ -19,37 +13,46 @@ use std::process::Command;
 use std::fs;
 use tokio_postgres::{Client, NoTls};
 use uuid::Uuid;
+use tower::ServiceBuilder;
+
+use tower_http::auth::AddAuthorization;
+
+use axum::middleware::from_fn;
+
+// struct APIKeyAuthorizationLayer {
+//     postgres_client: Arc<tokio_postgres::Client>,
+// }
+
+// impl AuthorizeRequest for APIKeyAuthorizationLayer {
+//     type ResponseBody = ();
+
+//     fn authorize(&mut self, request: &hyper::Request<hyper::Body>) -> Result<(), Self::ResponseBody> {
+//         let auth_header = request.headers().get(hyper::header::AUTHORIZATION)
+//             .and_then(|value| value.to_str().ok());
+
+//         match auth_header {
+//             Some(token) => {
+//                 // Validate the token here
+//                 if is_valid_token(self, token) {
+//                     Ok(())
+//                 } else {
+//                     Err(())
+//                 }
+//             }
+//             None => Err(()),
+//         }
+//     }
+// }
+
+// fn is_valid_token(layer: &APIKeyAuthorizationLayer, token: &str) -> bool {
+//     // Implement your token validation logic here
+//     // For example, you can compare the token against a predefined value
+//     token == "your_valid_token"
+// }
 
 #[derive(Deserialize)]
 struct SendMessage {
     message: String,
-}
-
-async fn account_details(Path(account_id): Path<String>) -> String {
-    if account_id == "ACO65G5Q3KWQPDT3DRUDE756FCQH36NQ67JZ6NTOOALJHYBXZUSFNUCI" {
-        return "eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJqdGkiOiJVM1AzU0pTVUhQSjZSQUxGVDRRWDNIU1BRSFc0WEhITkNDQ09IMlFUTkE3T1ZBU0VRNkRRIiwiaWF0IjoxNzA5NjI5MDQ0LCJpc3MiOiJPQUVKUElMQzVNWEdMVzZVVVNOVk1WRTI2VTdXR01KT1hRQ1BINFI1VTNERUE2VVpJRDZONFhGRyIsIm5hbWUiOiJ5b2hhbjAxIiwic3ViIjoiQUNPNjVHNVEzS1dRUERUM0RSVURFNzU2RkNRSDM2TlE2N0paNk5UT09BTEpIWUJYWlVTRk5VQ0kiLCJuYXRzIjp7ImxpbWl0cyI6eyJzdWJzIjotMSwiZGF0YSI6LTEsInBheWxvYWQiOi0xLCJpbXBvcnRzIjotMSwiZXhwb3J0cyI6LTEsIndpbGRjYXJkcyI6dHJ1ZSwiY29ubiI6LTEsImxlYWYiOi0xfSwiZGVmYXVsdF9wZXJtaXNzaW9ucyI6eyJwdWIiOnt9LCJzdWIiOnt9fSwiYXV0aG9yaXphdGlvbiI6eyJhdXRoX3VzZXJzIjpudWxsfSwidHlwZSI6ImFjY291bnQiLCJ2ZXJzaW9uIjoyfX0.L98wxq0CMCQyA2L1mrBvTCKawroYLhHKWklrHIlrF61KPFdQuHd_MKyAYiKfyVS6xBzdguYC7aX8MXq4FP_sDQ".to_string()
-    }
-    if account_id == "ACWPGFSDD6EJ5CGMOFO62AC3Q7CMLKUVRXVJDANMIJIKVTFXF27ACHVS" {
-        return "eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJqdGkiOiJQWFQzQlozQ1ZLNVNDNkRHQkZTM0NHUEJSQTNaU0ZIUzNCT0NaVDVUSE5WTUxOWkNVVFNRIiwiaWF0IjoxNzA5NjI4ODQ3LCJpc3MiOiJPQUVKUElMQzVNWEdMVzZVVVNOVk1WRTI2VTdXR01KT1hRQ1BINFI1VTNERUE2VVpJRDZONFhGRyIsIm5hbWUiOiJTWVNfQUNDT1VOVCIsInN1YiI6IkFDV1BHRlNERDZFSjVDR01PRk82MkFDM1E3Q01MS1VWUlhWSkRBTk1JSklLVlRGWEYyN0FDSFZTIiwibmF0cyI6eyJsaW1pdHMiOnsic3VicyI6LTEsImRhdGEiOi0xLCJwYXlsb2FkIjotMSwiaW1wb3J0cyI6LTEsImV4cG9ydHMiOi0xLCJ3aWxkY2FyZHMiOnRydWUsImNvbm4iOi0xLCJsZWFmIjotMX0sImRlZmF1bHRfcGVybWlzc2lvbnMiOnsicHViIjp7fSwic3ViIjp7fX0sImF1dGhvcml6YXRpb24iOnsiYXV0aF91c2VycyI6bnVsbH0sInR5cGUiOiJhY2NvdW50IiwidmVyc2lvbiI6Mn19.UpnAmSoD76TXcvW7RoFUTC-XdFispVaFXbDBbXpjkGIKF4nPG6YftDhd5_UOCo6CBzl1JWZVxrYJQDOJi_zRBQ".to_string()
-    }
-
-    if account_id == "AABQNX6YAEIMQWRPPENS5AGZ4RLSY5JPB7QESAZSTBZSU5VY3KKXPTBZ" {
-        return "eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJqdGkiOiJTU1ZVQUdLRkNaV0JWN1U0NEVRQ1dETzZMM1oyRENHMzdLNDdXS0JVQzY3RkFOVUIyWUtRIiwiaWF0IjoxNzEwMTU0NTQ4LCJpc3MiOiJPQUVKUElMQzVNWEdMVzZVVVNOVk1WRTI2VTdXR01KT1hRQ1BINFI1VTNERUE2VVpJRDZONFhGRyIsIm5hbWUiOiI3YzI3OGVjYy1kNjI0LTQ1YTAtYWE4Ny05YWRkNzI1M2I1MTciLCJzdWIiOiJBQUJRTlg2WUFFSU1RV1JQUEVOUzVBR1o0UkxTWTVKUEI3UUVTQVpTVEJaU1U1VlkzS0tYUFRCWiIsIm5hdHMiOnsibGltaXRzIjp7InN1YnMiOi0xLCJkYXRhIjotMSwicGF5bG9hZCI6LTEsImltcG9ydHMiOi0xLCJleHBvcnRzIjotMSwid2lsZGNhcmRzIjp0cnVlLCJjb25uIjotMSwibGVhZiI6LTF9LCJkZWZhdWx0X3Blcm1pc3Npb25zIjp7InB1YiI6e30sInN1YiI6e319LCJhdXRob3JpemF0aW9uIjp7ImF1dGhfdXNlcnMiOm51bGx9LCJ0eXBlIjoiYWNjb3VudCIsInZlcnNpb24iOjJ9fQ.WwbEn-VkRviR88goLodXQjdN3ejfd9jG5TkGKF5jpFRZvLaBCH1xb7k8goERBjP_XZOyMra44pSa0njaxDMOAg".to_string()
-    }
-
-    if account_id == "ABVGXFJMD4UNCZ3HYFBHTTFFMMPW3GKGIAW2JCJOPDEZEWRHXXRBRJMH" {
-        return "eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJqdGkiOiJEQ0xDS1VCUjNIT1QyTVQ3VkRLQlFHM1hPVDVNVlNHR0hEN1pFWFhNVkU1VzNONFNKUVVRIiwiaWF0IjoxNzExNDQ2NDkzLCJpc3MiOiJPQUVKUElMQzVNWEdMVzZVVVNOVk1WRTI2VTdXR01KT1hRQ1BINFI1VTNERUE2VVpJRDZONFhGRyIsIm5hbWUiOiJ5b2hhbjAyIiwic3ViIjoiQUJWR1hGSk1ENFVOQ1ozSFlGQkhUVEZGTU1QVzNHS0dJQVcySkNKT1BERVpFV1JIWFhSQlJKTUgiLCJuYXRzIjp7ImxpbWl0cyI6eyJzdWJzIjotMSwiZGF0YSI6LTEsInBheWxvYWQiOi0xLCJpbXBvcnRzIjotMSwiZXhwb3J0cyI6LTEsIndpbGRjYXJkcyI6dHJ1ZSwiY29ubiI6LTEsImxlYWYiOi0xfSwiZGVmYXVsdF9wZXJtaXNzaW9ucyI6eyJwdWIiOnt9LCJzdWIiOnt9fSwiYXV0aG9yaXphdGlvbiI6eyJhdXRoX3VzZXJzIjpudWxsfSwidHlwZSI6ImFjY291bnQiLCJ2ZXJzaW9uIjoyfX0.jTDdqJx7bTEvUrvGpGsBaegzSo0CMLf2PsJGjPxOXysUL9TUwiIIX4EjCNQAna7pv-EmtqH9FEsmEkyjv9JnBg".to_string()
-    }
-
-    if account_id == "ABOX6UJ4REBHGMEGKOVKSJC3YR2N33TIILK5VJVP4E4E24UNFDQ2XZR6" {
-        return "eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJqdGkiOiJLRFM0N1hJTjJLTk9aTFNEQ0FYQ1laREVXSUQ3SzRXRkNWUFJPQkFVVEEzRTJKWU5KWTdRIiwiaWF0IjoxNzEyNjU2MzQ5LCJpc3MiOiJPQUVKUElMQzVNWEdMVzZVVVNOVk1WRTI2VTdXR01KT1hRQ1BINFI1VTNERUE2VVpJRDZONFhGRyIsIm5hbWUiOiI3YzI3OGVjYy1kNjI0LTQ1YTAtYWE4Ny05YWRkNzI1M2I1MTciLCJzdWIiOiJBQk9YNlVKNFJFQkhHTUVHS09WS1NKQzNZUjJOMzNUSUlMSzVWSlZQNEU0RTI0VU5GRFEyWFpSNiIsIm5hdHMiOnsibGltaXRzIjp7InN1YnMiOi0xLCJkYXRhIjotMSwicGF5bG9hZCI6LTEsImltcG9ydHMiOi0xLCJleHBvcnRzIjotMSwid2lsZGNhcmRzIjp0cnVlLCJjb25uIjotMSwibGVhZiI6LTF9LCJkZWZhdWx0X3Blcm1pc3Npb25zIjp7InB1YiI6e30sInN1YiI6e319LCJhdXRob3JpemF0aW9uIjp7ImF1dGhfdXNlcnMiOm51bGx9LCJ0eXBlIjoiYWNjb3VudCIsInZlcnNpb24iOjJ9fQ.CLDG89mwIoFZfMuEqgtuVEyMb1bREgWWpctaBAQOCg60MnutfLpc4IC8e7iEzY-fLdTr7BAFrQFcL2SyVJzqDQ".to_string()
-    }
-
-    "Account not found".to_string()
-}
-
-async fn accounts_base() -> impl IntoResponse {
-    (StatusCode::OK, "OK")
 }
 
 #[derive(Clone)]
@@ -115,6 +118,23 @@ async fn send_message(
     (StatusCode::OK, "Sent to user").into_response()
 }
 
+async fn auth_middleware<Body>(
+    request: Request<axum::body::Body>,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let auth_header = request
+        .headers()
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|header| header.to_str().ok());
+
+    match auth_header {
+        Some(auth_header) if auth_header == "Bearer toto" => {
+            next.run(request).await
+        }
+        _ => StatusCode::UNAUTHORIZED.into_response(),
+    }
+}
+
 #[tokio::main]
 async fn main() {
     
@@ -132,11 +152,15 @@ async fn main() {
         nats_url: "localhost:4222".to_string()
     };
     
+    // let auth_layer = APIKeyAuthorizationLayer {
+    //     postgres_client: Arc::clone(&postgres_client)
+    // };
+
     // Set up the router
     let app = Router::new()
-        // .route("/jwt/v1/accounts/:account_id", get(account_details)) // Dynamic segment
-        // .route("/jwt/v1/accounts/", get(accounts_base)) // Base path
         .route("/send/:user_id", post(send_message))
+        .layer(from_fn(auth_middleware::<Body>))
+        // .layer(ServiceBuilder::new().layer(APIKeyAuthorizationLayer::new(auth_layer)))
         .with_state(state);
     
     // Define the server address
