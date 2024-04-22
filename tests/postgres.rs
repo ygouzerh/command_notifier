@@ -81,7 +81,45 @@ async fn test_verify_api_key() {
 }
 
 #[tokio::test]
-async fn test_add_api() {
+async fn test_add_multiple_apis() {
+    let postgres_client = setup_postgres_client().await;
+    let postgres_client = Arc::new(postgres_client);
+    let user_id = get_user_uuid();
+    let api_key_value = "APIKEY123";
+
+    for _ in 0..3 {
+        let result = add_api_key(Arc::clone(&postgres_client), user_id, api_key_value).await;
+        assert!(result.is_ok(), "Failed to add api key: {:?}", result);
+    }
+
+    // Verify that api key is added
+    let query_result = postgres_client.query("SELECT id, api_key_hash FROM api_keys WHERE user_id = $1", &[&user_id])
+        .await
+        .unwrap();
+    assert!(query_result.len() == 3, "API Keys number should be 3");
+
+    // Verify that the content of the api_keys_hash is well different for the 3 rows
+    let mut api_keys_hash: Vec<String> = Vec::new();
+    for row in query_result.iter() {
+        let api_key_hash: String = row.get(1);
+        api_keys_hash.push(api_key_hash);
+    }
+
+    // Cleanup
+    let mut results: Vec<Result<bool, tokio_postgres::Error>> = Vec::new();
+    for row in query_result.iter() {
+        let api_key_id: Uuid = row.get(0);
+        let result = delete_api_key(Arc::clone(&postgres_client), api_key_id).await;
+        results.push(result);
+    }
+
+    let all_ok = results.into_iter().all(|x| x.is_ok());
+    assert!(all_ok, "Failed to delete api key");
+
+}
+
+#[tokio::test]
+async fn test_add_one_api() {
     let postgres_client = setup_postgres_client().await;
     let postgres_client = Arc::new(postgres_client);
     let user_id = get_user_uuid();
