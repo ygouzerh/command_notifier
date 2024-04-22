@@ -19,37 +19,6 @@ use tower_http::auth::AddAuthorization;
 
 use axum::middleware::from_fn;
 
-// struct APIKeyAuthorizationLayer {
-//     postgres_client: Arc<tokio_postgres::Client>,
-// }
-
-// impl AuthorizeRequest for APIKeyAuthorizationLayer {
-//     type ResponseBody = ();
-
-//     fn authorize(&mut self, request: &hyper::Request<hyper::Body>) -> Result<(), Self::ResponseBody> {
-//         let auth_header = request.headers().get(hyper::header::AUTHORIZATION)
-//             .and_then(|value| value.to_str().ok());
-
-//         match auth_header {
-//             Some(token) => {
-//                 // Validate the token here
-//                 if is_valid_token(self, token) {
-//                     Ok(())
-//                 } else {
-//                     Err(())
-//                 }
-//             }
-//             None => Err(()),
-//         }
-//     }
-// }
-
-// fn is_valid_token(layer: &APIKeyAuthorizationLayer, token: &str) -> bool {
-//     // Implement your token validation logic here
-//     // For example, you can compare the token against a predefined value
-//     token == "your_valid_token"
-// }
-
 #[derive(Deserialize)]
 struct SendMessage {
     message: String,
@@ -119,9 +88,20 @@ async fn send_message(
 }
 
 async fn auth_middleware<Body>(
+    State(state): State<AppState>,
+    Path(user_id): Path<String>,
     request: Request<axum::body::Body>,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
+
+    let AppState {
+        creds_base_path: _,
+        operator_name: _,
+        postgres_client,
+        main_topic: _,
+        nats_url: _
+    } = state;
+
     let auth_header = request
         .headers()
         .get(axum::http::header::AUTHORIZATION)
@@ -157,10 +137,13 @@ async fn main() {
     // };
 
     // Set up the router
+    let app_state = state.clone();
     let app = Router::new()
         .route("/send/:user_id", post(send_message))
-        .layer(from_fn(auth_middleware::<Body>))
-        // .layer(ServiceBuilder::new().layer(APIKeyAuthorizationLayer::new(auth_layer)))
+        .layer(from_fn(move |path, request, next| {
+            let state = app_state.clone();
+            auth_middleware::<Body>(axum::extract::State(state), path, request, next)
+        }))
         .with_state(state);
     
     // Define the server address

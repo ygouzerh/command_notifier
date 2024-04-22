@@ -1,11 +1,14 @@
 use command_notifier::postgres::{
-    verify_nsc_user_exists,
-    insert_nsc_user,
     delete_nsc_user_from_postgres,
+    get_creds_admin,
+    insert_nsc_user,
+    update_account_jwt,
     update_creds_admin,
     update_creds_user,
-    get_creds_admin,
-    update_account_jwt
+    verify_nsc_user_exists,
+    add_api_key,
+    delete_api_key,
+    verify_api_key
 };
 
 use std::sync::Arc;
@@ -14,6 +17,99 @@ use uuid::Uuid;
 mod common;
 
 use common::utils::{get_user_uuid, setup_postgres_client, insert_dummy_nsc_user, cleanup_postgres_user};
+
+#[tokio::test]
+async fn test_delete_api_key() {
+    let postgres_client = setup_postgres_client().await;
+    let postgres_client = Arc::new(postgres_client);
+    let user_id = get_user_uuid();
+    let api_key_value = "APIKEY123";
+
+    let result = add_api_key(Arc::clone(&postgres_client), user_id, api_key_value).await;
+    assert!(result.is_ok(), "Failed to add api key: {:?}", result);
+
+    let query_result = postgres_client.query("SELECT id FROM api_keys WHERE user_id = $1", &[&user_id])
+        .await
+        .unwrap();
+    let row = query_result.get(0);
+
+    assert!(row.is_some(), "Api key should exist");
+
+    let api_key_id: Uuid = row.unwrap().get(0);
+    let result = delete_api_key(Arc::clone(&postgres_client), api_key_id).await;
+    assert!(result.is_ok(), "Failed to delete api key: {:?}", result);
+
+    let query_result = postgres_client.query("SELECT id FROM api_keys WHERE user_id = $1", &[&user_id])
+        .await
+        .unwrap();
+    let row = query_result.get(0);
+
+    assert!(row.is_none(), "Api key should not exist");
+
+
+}
+
+#[tokio::test]
+async fn test_verify_api_key() {
+    let postgres_client = setup_postgres_client().await;
+    let postgres_client = Arc::new(postgres_client);
+    let postgres_client_two = Arc::clone(&postgres_client);
+    let postgres_client_three = Arc::clone(&postgres_client);
+    let user_id = get_user_uuid();
+    let api_key_value = "APIKEY123";
+
+    let result = add_api_key(Arc::clone(&postgres_client), user_id, api_key_value).await;
+    assert!(result.is_ok(), "Failed to add api key: {:?}", result);
+
+    let result_test = tokio::spawn(async move {
+        let result = verify_api_key(Arc::clone(&postgres_client), user_id, api_key_value).await;
+        assert!(result.is_ok(), "Failed to verify api key: {:?}", result);
+        assert!(result.unwrap() == true, "Api key verifiction should be successfull");
+    }).await;
+
+    // Cleanup
+    let query_result = postgres_client_two.query("SELECT id FROM api_keys WHERE user_id = $1", &[&user_id])
+        .await
+        .unwrap();
+    let row = query_result.get(0);
+    let api_key_id: Uuid = row.unwrap().get(0);
+    let result_deletion = delete_api_key(Arc::clone(&postgres_client_three), api_key_id).await;
+
+    assert!(result_deletion.is_ok(), "Failed to delete api key: {:?}", result_deletion);
+    assert!(result_test.is_ok(), "Failed to verify api key: {:?}", result_test);
+
+}
+
+#[tokio::test]
+async fn test_add_api() {
+    let postgres_client = setup_postgres_client().await;
+    let postgres_client = Arc::new(postgres_client);
+    let user_id = get_user_uuid();
+    let api_key_value = "APIKEY123";
+
+    let result = add_api_key(Arc::clone(&postgres_client), user_id, api_key_value).await;
+    assert!(result.is_ok(), "Failed to add api key: {:?}", result);
+
+    // Verify that api key is added
+    let query_result = postgres_client.query("SELECT id, api_key_hash FROM api_keys WHERE user_id = $1", &[&user_id])
+        .await
+        .unwrap();
+    assert!(query_result.len() > 0, "No api key found");
+    let row = query_result.get(0);
+    let api_key_id: Uuid = row.unwrap().get(0);
+    let api_key_hash: String = row.unwrap().get(1);
+
+    // Verify that the api key hash is correct using bcrypt
+    let result = bcrypt::verify(api_key_value, &api_key_hash)
+        .map_err(|err| format!("Failed to run bcrypt api key: {}", err));
+
+    assert!(result.is_ok(), "Api key hash inserted is not correct: {:?}", result);
+
+    // Cleanup
+    let result = delete_api_key(Arc::clone(&postgres_client), api_key_id).await;
+    assert!(result.is_ok(), "Failed to delete api key: {:?}", result);
+
+}
 
 #[tokio::test]
 async fn test_get_creds_admin() {

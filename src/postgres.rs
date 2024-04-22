@@ -85,6 +85,32 @@ pub async fn update_account_jwt(postgres_client: Arc<tokio_postgres::Client>, us
     Ok(result > 0)
 }
 
-pub async fn get_api_key(postgres_client: Arc<tokio_postgres::Client>, user_id: Uuid) -> Result<String, tokio_postgres::Error>{
-    todo!()
+pub async fn add_api_key(postgres_client: Arc<tokio_postgres::Client>, user_id: Uuid, api_key_value: &str) -> Result<bool, String>{
+    let api_key_hash = bcrypt::hash(api_key_value, bcrypt::DEFAULT_COST)
+        .map_err(|err| format!("Failed to hash the api key: {}", err))?;
+    let result = postgres_client.execute("INSERT INTO api_keys (user_id, api_key_hash) VALUES ($1, $2)", &[&user_id, &api_key_hash])
+        .await
+        .map_err(|err| format!("Failed to insert api key: {}", err))?;
+    Ok(result > 0)
+}
+
+pub async fn delete_api_key(postgres_client: Arc<tokio_postgres::Client>, api_key_id: Uuid) -> Result<bool, tokio_postgres::Error> {
+    let result = postgres_client.execute("DELETE FROM api_keys WHERE id = $1", &[&api_key_id])
+        .await?;
+    Ok(result > 0)
+}
+
+pub async fn verify_api_key(postgres_client: Arc<tokio_postgres::Client>, user_id: Uuid, api_key_input: &str) -> Result<bool, String>{
+    let rows = postgres_client.query("SELECT api_key_hash FROM api_keys WHERE user_id = $1", &[&user_id])
+        .await
+        .map_err(|err| format!("Failed to run query: {}", err))?;
+
+    println!("Row 0: {:?}", rows.get(0));
+
+    // Check if any of the row is equal to the api_key_hash
+    let result = rows.iter().any(|row| {
+        let api_key_hash: &str = row.get("api_key_hash");
+        bcrypt::verify(api_key_input, api_key_hash).unwrap_or(false)
+    });
+    Ok(result)
 }
