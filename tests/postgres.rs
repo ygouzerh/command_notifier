@@ -332,7 +332,14 @@ async fn test_check_user_well_not_exists() {
 async fn test_check_user_well_exists() {
     let postgres_client = setup_postgres_client().await;
     let uuid =  Uuid::parse_str("6f462cbc-b2d5-43eb-b61a-9c7c892d2eb2").unwrap();
-    let result = verify_nsc_user_exists(Arc::new(postgres_client), uuid).await;
-    assert!(result.is_ok(), "Failed to verify user exists: {:?}", result);
-    assert!(result.unwrap() == true, "User should exist");
+    cleanup_postgres_user(uuid).await;
+    let result = tokio::spawn(async move {
+        let result = insert_dummy_nsc_user(uuid).await;
+        assert!(result.is_ok(), "Failed to insert user: {:?}", result);
+        let result = verify_nsc_user_exists(Arc::new(postgres_client), uuid).await;
+        assert!(result.is_ok(), "Failed to verify user exists: {:?}", result);
+        assert!(result.unwrap() == true, "User should exist");
+    }).await;
+    cleanup_postgres_user(uuid).await;
+    assert!(result.is_ok(), "Failed the test: {:?}", result);
 }
