@@ -200,40 +200,42 @@ async fn test_get_admin_creds_not_yet_exists() {
     cleanup_user(username, &operator_name, account_name).await;
     
     let result = tokio::spawn(async move {
-    
+        
         let _result = insert_dummy_nsc_user(username_uuid).await;
-
+        
         let _result = update_creds_admin(Arc::clone(&postgres_client), username_uuid, creds_admin).await;
-
+        
         let result = get_admin_creds_if_not_exists(&creds_base_path, &operator_name, account_name, username).await;
         
         let creds_path = result.unwrap();
-
+        
         let correct_base_path = format!("{}/{}/{}/{}.creds", creds_base_path, operator_name, account_name, username);
-
+        
         assert_eq!(creds_path, correct_base_path, "Creds path is incorrect");
-
+        
         // Content of the file should be the same than creds_admin
         let content = std::fs::read_to_string(&creds_path)
-            .map_err(|err| format!("Failed to read creds_admin file: {}", err))
-            .unwrap();
-        assert_eq!(content, creds_admin, "Content of the file is incorrect");
+        .map_err(|err| format!("Failed to read creds_admin file: {}", err))
+        .unwrap();
+    assert_eq!(content, creds_admin, "Content of the file is incorrect");
+    
+}).await;
 
-    }).await;
+cleanup_user(username, &operator_name_cloned, account_name).await;
 
-    assert!(result.is_ok(), "Test failed");
+assert!(result.is_ok(), "Test failed");
 
-    let creds_path = get_creds_path(creds_base_path_cloned.as_str(), &operator_name_cloned, account_name, username);
+let creds_path = get_creds_path(creds_base_path_cloned.as_str(), &operator_name_cloned, account_name, username);
 
-    let _result = std::fs::remove_file(&creds_path);
+let _result = std::fs::remove_file(&creds_path);
 
-    let _result = delete_nsc_user_from_postgres(Arc::clone(&postgres_client_clone), username_uuid).await;
+let _result = delete_nsc_user_from_postgres(Arc::clone(&postgres_client_clone), username_uuid).await;
 
 }
 
 #[tokio::test]
 async fn test_get_admin_creds_already_exists() {
-
+    
     let creds_base_path = env::var("CREDS_BASE_PATH").expect("CREDS_BASE_PATH must be set");
     let creds_base_path_cloned = creds_base_path.to_owned();
 
@@ -244,40 +246,41 @@ async fn test_get_admin_creds_already_exists() {
     let creds_admin = "A656878dqdqdqwd";
 
     cleanup_user(username, &operator_name, account_name).await;
-
+    
     let operator_name_cloned = operator_name.to_owned();
     
     let result = tokio::spawn(async move {
         
         let creds_path = get_creds_path(&creds_base_path, &operator_name, account_name, username);
-
+        
         println!("Creds path: {}", creds_path);
         
         std::fs::write(&creds_path, creds_admin)
-            .map_err(|err| format!("Failed to write creds_admin to file: {}", err))
-            .unwrap();
-
-        let result = get_admin_creds_if_not_exists(&creds_base_path, &operator_name, account_name, username).await;
-
-        assert!(result.is_ok(), "Failed to get creds path: {:?}", result);
-
-        let creds_path = result.unwrap();
-
-        assert!(!creds_path.is_empty(), "Creds path should not be empty");
-
-        let correct_base_path = format!("{}/{}/{}/{}.creds", creds_base_path, operator_name, account_name, username);
-
-        assert_eq!(creds_path, correct_base_path, "Creds path is incorrect");
-
-        // Content of the file should be the same than creds_admin
-        let content = std::fs::read_to_string(&creds_path)
-            .map_err(|err| format!("Failed to read creds_admin file: {}", err))
-            .unwrap();
+        .map_err(|err| format!("Failed to write creds_admin to file: {}", err))
+        .unwrap();
+    
+    let result = get_admin_creds_if_not_exists(&creds_base_path, &operator_name, account_name, username).await;
+    
+    assert!(result.is_ok(), "Failed to get creds path: {:?}", result);
+    
+    let creds_path = result.unwrap();
+    
+    assert!(!creds_path.is_empty(), "Creds path should not be empty");
+    
+    let correct_base_path = format!("{}/{}/{}/{}.creds", creds_base_path, operator_name, account_name, username);
+    
+    assert_eq!(creds_path, correct_base_path, "Creds path is incorrect");
+    
+    // Content of the file should be the same than creds_admin
+    let content = std::fs::read_to_string(&creds_path)
+    .map_err(|err| format!("Failed to read creds_admin file: {}", err))
+    .unwrap();
         assert_eq!(content, creds_admin, "Content of the file is incorrect");
     }).await;
 
-    // Remove creds file
+    cleanup_user(username, &operator_name_cloned, account_name).await;
 
+    // Remove creds file
     let creds_path = get_creds_path(creds_base_path_cloned.as_str(), &operator_name_cloned, account_name, username);
 
     let _result = std::fs::remove_file(&creds_path);
