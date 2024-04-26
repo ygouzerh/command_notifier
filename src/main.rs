@@ -57,12 +57,11 @@ async fn send_message(
     }
     let user_uuid = user_uuid.unwrap();
     let account_name = &user_id;
-    let user_name = &user_id;
     let user_exists = verify_nsc_user_exists(Arc::clone(&postgres_client), user_uuid).await.unwrap();
     if !user_exists {
         return (StatusCode::NOT_FOUND, "User not found").into_response();
     }
-    let creds_admin_path = get_admin_creds_if_not_exists(&creds_base_path, &operator_name, &account_name, &user_name).await;
+    let creds_admin_path = get_admin_creds_if_not_exists(&creds_base_path, &operator_name, &account_name).await;
     if let Err(e) = creds_admin_path {
         // Log the error using a logging library or custom logging mechanism
         println!("Failed to get the admin credentials of the user: {:?}", e);
@@ -197,6 +196,7 @@ async fn delete_nsc_user(
     State(state): State<AppState>,
     Path(user_id): Path<String>
 ) -> impl IntoResponse {
+    // TODO: no need to run it again if already deleted
     let AppState {
         creds_base_path,
         operator_name,

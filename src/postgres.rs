@@ -105,8 +105,6 @@ pub async fn verify_api_key(postgres_client: Arc<tokio_postgres::Client>, user_i
         .await
         .map_err(|err| format!("Failed to run query: {}", err))?;
 
-    println!("Row 0: {:?}", rows.get(0));
-
     // Check if any of the row is equal to the api_key_hash
     let result = rows.iter().any(|row| {
         let api_key_hash: &str = row.get("api_key_hash");

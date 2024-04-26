@@ -56,22 +56,19 @@ pub async fn delete_user_everywhere(postgres_client: Arc<tokio_postgres::Client>
     Ok(())
 }
 
-pub async fn get_admin_creds_if_not_exists(creds_base_path: &str, operator_name: &str, account_name: &str, username: &str) -> Result<String, String>{
+pub async fn get_admin_creds_if_not_exists(creds_base_path: &str, operator_name: &str, account_name: &str) -> Result<String, String>{
     // This function will check if the admin_creds are already downloaded under creds_path/uuid or not, otherwise it will pull them from the database
     
+    let user_uuid = Uuid::parse_str(account_name)
+        .map_err(|err| format!("Failed to parse account name as an uuid: {}", err))?;
+
+    let username = "admin_01";
+
     if let Ok(creds_path) = check_if_creds_exists(creds_base_path, operator_name, account_name, username) {
         return Ok(creds_path);
     }
     
-    let user_uuid = Uuid::parse_str(username)
-        .map_err(|err| format!("Failed to parse user uuid: {}", err))?;
-
     let postgres_client = Arc::new(setup_postgres_client().await);
-
-    // TODO: Check if the responsability of this function or not
-    verify_nsc_user_exists(Arc::clone(&postgres_client), user_uuid)
-        .await
-        .map_err(|err| format!("Failed to verify user exists: {}", err))?;
 
     let creds_admin = get_creds_admin(Arc::clone(&postgres_client), user_uuid)
         .await

@@ -162,6 +162,8 @@ async fn cleanup_user(username: &str, operator_name:&str, account_name: &str) {
     let _result = delete_nsc_user(account_name, username);
     let _result = delete_nsc_account(username);
     let _result = std::fs::remove_file(get_creds_path(&creds_base_path, operator_name, account_name, username));
+    let _result = std::fs::remove_file(get_creds_path(&creds_base_path, operator_name, account_name, "admin_01"));
+    let _result = std::fs::remove_file(get_creds_path(&creds_base_path, operator_name, account_name, "user_01"));
     let _result = cleanup_postgres_user(username_uuid).await;
 }
 
@@ -169,12 +171,12 @@ async fn cleanup_user(username: &str, operator_name:&str, account_name: &str) {
 async fn test_get_admin_creds_not_exists_should_fail() {
     let creds_base_path = env::var("CREDS_BASE_PATH").expect("CREDS_BASE_PATH must be set");
     let operator_name = env::var("TEST_OPERATOR_NAME").expect("TEST_OPERATOR_NAME must be set");
-    let account_name = "test_acooount";
+    let account_name = "7c278e3c-d344-45a0-a287-9add7253b512";
     let username = "7c278e3c-d344-45a0-a287-9add7253b512";
 
     cleanup_user(username, &operator_name, account_name).await;
 
-    let result = get_admin_creds_if_not_exists(&creds_base_path, &operator_name, account_name, username).await;
+    let result = get_admin_creds_if_not_exists(&creds_base_path, &operator_name, account_name).await;
 
     assert!(result.is_err(), "Result should be an error {:?}", result);
 }
@@ -185,10 +187,11 @@ async fn test_get_admin_creds_not_yet_exists() {
     let creds_base_path = env::var("CREDS_BASE_PATH").expect("CREDS_BASE_PATH must be set");
 
     let operator_name = env::var("TEST_OPERATOR_NAME").expect("TEST_OPERATOR_NAME must be set");
-    let account_name = "test_account";
+    let account_name = get_user_uuid();
+    let account_name = account_name.to_string();
+    let account_name_cloned = account_name.clone();
+    let username_uuid = get_user_uuid();
     let creds_admin = "A656878dqdqdqwd";
-    let username = "7c278ecc-d624-45a0-aa87-9add7253b517";
-    let username_uuid = Uuid::parse_str(username).unwrap();
 
     let postgres_client = Arc::new(setup_postgres_client().await);
     let postgres_client_clone = Arc::clone(&postgres_client);
@@ -197,7 +200,7 @@ async fn test_get_admin_creds_not_yet_exists() {
 
     let operator_name_cloned = operator_name.to_owned();
 
-    cleanup_user(username, &operator_name, account_name).await;
+    cleanup_user(&username_uuid.to_string(), &operator_name, &account_name).await;
     
     let result = tokio::spawn(async move {
         
@@ -205,11 +208,11 @@ async fn test_get_admin_creds_not_yet_exists() {
         
         let _result = update_creds_admin(Arc::clone(&postgres_client), username_uuid, creds_admin).await;
         
-        let result = get_admin_creds_if_not_exists(&creds_base_path, &operator_name, account_name, username).await;
+        let result = get_admin_creds_if_not_exists(&creds_base_path, &operator_name, &account_name).await;
         
         let creds_path = result.unwrap();
         
-        let correct_base_path = format!("{}/{}/{}/{}.creds", creds_base_path, operator_name, account_name, username);
+        let correct_base_path = format!("{}/{}/{}/{}.creds", creds_base_path, operator_name, &account_name, "admin_01");
         
         assert_eq!(creds_path, correct_base_path, "Creds path is incorrect");
         
@@ -217,19 +220,20 @@ async fn test_get_admin_creds_not_yet_exists() {
         let content = std::fs::read_to_string(&creds_path)
         .map_err(|err| format!("Failed to read creds_admin file: {}", err))
         .unwrap();
-    assert_eq!(content, creds_admin, "Content of the file is incorrect");
+
+        assert_eq!(content, creds_admin, "Content of the file is incorrect");
     
-}).await;
+    }).await;
 
-cleanup_user(username, &operator_name_cloned, account_name).await;
+    cleanup_user(&username_uuid.to_string(), &operator_name_cloned, &account_name_cloned).await;
 
-assert!(result.is_ok(), "Test failed");
+    assert!(result.is_ok(), "Test failed");
 
-let creds_path = get_creds_path(creds_base_path_cloned.as_str(), &operator_name_cloned, account_name, username);
+    let creds_path = get_creds_path(creds_base_path_cloned.as_str(), &operator_name_cloned, &account_name_cloned, "admin_01");
 
-let _result = std::fs::remove_file(&creds_path);
+    let _result = std::fs::remove_file(&creds_path);
 
-let _result = delete_nsc_user_from_postgres(Arc::clone(&postgres_client_clone), username_uuid).await;
+    let _result = delete_nsc_user_from_postgres(Arc::clone(&postgres_client_clone), username_uuid).await;
 
 }
 
@@ -240,48 +244,50 @@ async fn test_get_admin_creds_already_exists() {
     let creds_base_path_cloned = creds_base_path.to_owned();
 
     let operator_name = env::var("TEST_OPERATOR_NAME").expect("TEST_OPERATOR_NAME must be set");
-    let account_name = "test_account";
-    let username = "7c278ecc-d324-45a0-aa87-9add7253b512";
+    let account_name = get_user_uuid();
+    let account_name = account_name.to_string();
+    let account_name_cloned = account_name.clone();
+    let username_uuid = get_user_uuid();
 
     let creds_admin = "A656878dqdqdqwd";
 
-    cleanup_user(username, &operator_name, account_name).await;
+    cleanup_user(&username_uuid.to_string(), &operator_name, &account_name).await;
     
     let operator_name_cloned = operator_name.to_owned();
     
     let result = tokio::spawn(async move {
         
-        let creds_path = get_creds_path(&creds_base_path, &operator_name, account_name, username);
+        let creds_path = get_creds_path(&creds_base_path, &operator_name, &account_name, "admin_01");
         
         println!("Creds path: {}", creds_path);
         
         std::fs::write(&creds_path, creds_admin)
-        .map_err(|err| format!("Failed to write creds_admin to file: {}", err))
+            .map_err(|err| format!("Failed to write creds_admin to file: {}", err))
+            .unwrap();
+    
+        let result = get_admin_creds_if_not_exists(&creds_base_path, &operator_name, &account_name).await;
+        
+        assert!(result.is_ok(), "Failed to get creds path: {:?}", result);
+        
+        let creds_path = result.unwrap();
+        
+        assert!(!creds_path.is_empty(), "Creds path should not be empty");
+        
+        let correct_base_path = format!("{}/{}/{}/{}.creds", creds_base_path, operator_name, account_name, "admin_01");
+        
+        assert_eq!(creds_path, correct_base_path, "Creds path is incorrect");
+        
+        // Content of the file should be the same than creds_admin
+        let content = std::fs::read_to_string(&creds_path)
+        .map_err(|err| format!("Failed to read creds_admin file: {}", err))
         .unwrap();
-    
-    let result = get_admin_creds_if_not_exists(&creds_base_path, &operator_name, account_name, username).await;
-    
-    assert!(result.is_ok(), "Failed to get creds path: {:?}", result);
-    
-    let creds_path = result.unwrap();
-    
-    assert!(!creds_path.is_empty(), "Creds path should not be empty");
-    
-    let correct_base_path = format!("{}/{}/{}/{}.creds", creds_base_path, operator_name, account_name, username);
-    
-    assert_eq!(creds_path, correct_base_path, "Creds path is incorrect");
-    
-    // Content of the file should be the same than creds_admin
-    let content = std::fs::read_to_string(&creds_path)
-    .map_err(|err| format!("Failed to read creds_admin file: {}", err))
-    .unwrap();
-        assert_eq!(content, creds_admin, "Content of the file is incorrect");
+            assert_eq!(content, creds_admin, "Content of the file is incorrect");
     }).await;
 
-    cleanup_user(username, &operator_name_cloned, account_name).await;
+    cleanup_user(&username_uuid.to_string(), &operator_name_cloned, &account_name_cloned).await;
 
     // Remove creds file
-    let creds_path = get_creds_path(creds_base_path_cloned.as_str(), &operator_name_cloned, account_name, username);
+    let creds_path = get_creds_path(creds_base_path_cloned.as_str(), &operator_name_cloned, &account_name_cloned, "admin_01");
 
     let _result = std::fs::remove_file(&creds_path);
 
