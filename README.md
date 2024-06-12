@@ -12,7 +12,7 @@ curl -H "Authorization: ...." https://.../<user-id>/notify
 
 To receive a notification on their own screen.
 
-This could be helpful for DevOps Engineers/SRE/Platform Engineers for example that are running long job on a server and want to be notified when its finish;
+This could be helpful for DevOps Engineers/SRE/Platform Engineers for example that are running long job on a server and want to be notified when its finished;
 or when troubleshooting a CICD Pipeline, etc
 
 This backend interacts with NATS to manage the messaging system and with a PostgresQL database to perform the user management
