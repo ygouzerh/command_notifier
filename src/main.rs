@@ -71,6 +71,7 @@ async fn send_message(
     }
     let creds_admin_path = creds_admin_path.unwrap();
     println!("Creds admin path: {:?}", creds_admin_path);
+    // TODO: Put an error message at this unwrap, as it's often due to the docker service not being up
     let nats_client = nats::Options::with_credentials(creds_admin_path).connect(nats_url).unwrap();
 
     let _ = match nats_client.publish(&main_topic, &payload.message) {
@@ -249,7 +250,7 @@ async fn main() {
             let state = app_state.clone();
             auth_middleware::<Body>(axum::extract::State(state), path, request, next)
         }))
-        .route("/user/:user_id/api/create", post(create_api_key))
+        .route("/user/:user_id/api-keys/create", post(create_api_key))
         .route("/user/:user_id/nsc/create", post(create_nsc_user))
         // TODO: It seems the deletion is not working for the removal of the file
         .route("/user/:user_id/nsc/delete", post(delete_nsc_user))
