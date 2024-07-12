@@ -32,7 +32,15 @@ cargo test -- --test-threads=1
 
 ## Setup locally
 
-### 1. Run the NATS docker container
+### 1. Run the NATS Authorization server
+
+(Note: in a new terminal)
+
+1. Go to the folder with the nats_authorization_server
+2. `export AUTHORIZATION_DB_CONNECTION_STRING="host=aws-0-ap-southeast-1.pooler.supabase.com user=postgres.something password=SOMETHING dbname=postgres"`
+3. `cargo run`
+
+### 2. Run the NATS docker container
 
 (Note: in a new terminal)
 
@@ -50,14 +58,6 @@ docker run --rm --name my-nats-server \
   -c /nats-server.conf
 ```
 
-### 2. Run the NATS Authorization server
-
-(Note: in a new terminal)
-
-1. Go to the folder with the nats_authorization_server
-2. `export AUTHORIZATION_DB_CONNECTION_STRING="host=aws-0-ap-southeast-1.pooler.supabase.com user=postgres.something password=SOMETHING dbname=postgres"`
-3. `cargo run`
-
 ### 3. Run the main part
 
 (Note: in a new terminal)
@@ -67,6 +67,7 @@ docker run --rm --name my-nats-server \
     - Ex: `export CREDS_BASE_PATH="/Users/yohangouzerh/.local/share/nats/nsc/keys/creds"`
 2. `export TEST_OPERATOR_NAME="ServerBackend"`
 3. `export DATABASE_CONNECTION_STRING="host=aws-0-ap-southeast-1.pooler.supabase.com user=postgres.something password=SOMETHING dbname=postgres"`
+4. `cargo run`
 
 ### 4. (Optional) Create a user
 
@@ -90,7 +91,7 @@ docker run --rm --name my-nats-server \
 
 1. Copy the user creds file
 
-Example: `cp /Users/yohangouzerh/.local/share/nats/nsc/keys/creds/ServerBackend/7c278ecc-d624-45a0-aa87-9add7253b517/user_01.creds .`
+Example: `cp /Users/yohangouzerh/.local/share/nats/nsc/keys/creds/ServerBackend/7c278ecc-d624-45a0-aa87-9add7253b517/user_01.creds 7c278ecc-d624-45a0-aa87-9add7253b517_user.creds`
 
 2. Listen to the sub
 
